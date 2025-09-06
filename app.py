@@ -30,13 +30,14 @@ def get_conn_cursor():
     cursor = conn.cursor()
     return conn, cursor
 
-# Cria tabela se não existir
+# Cria tabela se não existir (agora com descrição)
 conn, cursor = get_conn_cursor()
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS arquivos (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(255) NOT NULL,
     tipo VARCHAR(50) NOT NULL,
+    descricao TEXT DEFAULT '',
     data TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """)
@@ -46,13 +47,14 @@ conn.close()
 
 # -------------------- ROTAS --------------------
 
-# Upload de arquivo (API rodando)
+# Upload de arquivo (agora com descrição)
 @app.route("/upload", methods=["POST"])
 def upload_file():
     if "file" not in request.files:
         return jsonify({"error": "Nenhum arquivo enviado"}), 400
 
     file = request.files["file"]
+    descricao = request.form.get("descricao", "")  # pega a descrição
     if file.filename == "":
         return jsonify({"error": "Arquivo sem nome"}), 400
     if not allowed_file(file.filename):
@@ -63,14 +65,17 @@ def upload_file():
     file.save(filepath)
 
     conn, cursor = get_conn_cursor()
-    cursor.execute("INSERT INTO arquivos (nome, tipo) VALUES (%s, %s)", (filename, file.content_type))
+    cursor.execute(
+        "INSERT INTO arquivos (nome, tipo, descricao) VALUES (%s, %s, %s)",
+        (filename, file.content_type, descricao)
+    )
     conn.commit()
     cursor.close()
     conn.close()
 
-    return jsonify({"message": "Arquivo enviado com sucesso!", "filename": filename})
+    return jsonify({"message": "Arquivo enviado com sucesso!", "filename": filename, "descricao": descricao})
 
-# Listar arquivos (API rodando)
+# Listar arquivos (agora retornando a descrição)
 @app.route("/galeria", methods=["GET"])
 def listar_arquivos():
     tipo = request.args.get("tipo")
@@ -82,14 +87,21 @@ def listar_arquivos():
     arquivos = cursor.fetchall()
     cursor.close()
     conn.close()
-    return jsonify(arquivos)
+    # Retorna lista de dicionários com id, nome, tipo, descricao e data
+    return jsonify([{
+        "id": a[0],
+        "nome": a[1],
+        "tipo": a[2],
+        "descricao": a[3],
+        "data": a[4].isoformat()
+    } for a in arquivos])
 
-# Servir arquivos (API rodando)
+# Servir arquivos
 @app.route("/uploads/<path:filename>", methods=["GET"])
 def serve_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# Deletar arquivo por ID (API rodando)
+# Deletar arquivo por ID
 @app.route("/delete/<int:id>", methods=["DELETE"])
 def deletar_arquivo(id):
     conn, cursor = get_conn_cursor()
@@ -111,7 +123,7 @@ def deletar_arquivo(id):
 
     return jsonify({"message": "Arquivo removido com sucesso!"})
 
-# Deletar todos os arquivos (API rodando)
+# Deletar todos os arquivos
 @app.route("/delete_all", methods=["DELETE"])
 def deletar_todos():
     conn, cursor = get_conn_cursor()
