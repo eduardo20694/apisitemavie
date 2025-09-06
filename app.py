@@ -1,3 +1,4 @@
+
 import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -43,7 +44,7 @@ conn.commit()
 
 # -------------------- ENDPOINTS --------------------
 
-# Upload de arquivos
+# Upload arquivos
 @app.route("/upload", methods=["POST"])
 def upload_file():
     if "file" not in request.files:
